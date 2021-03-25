@@ -1,11 +1,12 @@
 var originElement;
 var xpathArray;
-var gridArray;
+var gridArray = [];
 var iframeStack = [];
 var DOMSet;
 var colorCode;
 var colorCode = 'gray';
 var type = 0;
+var cluster = [];
 
 function removeCoverBox() {
     document.querySelectorAll('.sideexCoverageElement').forEach(e => e.remove());
@@ -19,18 +20,17 @@ function showAllClusters(nodeList) {
         iframeStack = [];
     }
 
-    gridArray = [];
     while (DOMSet.size > 0) {
+        gridArray = [];
         console.log(DOMSet.size);
         const first = DOMSet.values().next().value;
         const parentRect = first.parentElement.getBoundingClientRect();
         const nodeRect = first.getBoundingClientRect();
-        if (parentRect.width * parentRect.height > nodeRect.width * nodeRect.height * 2)
-            createClusterByBaseElement(first);
+        // if (parentRect.width * parentRect.height > nodeRect.width * nodeRect.height * 2) createClusterByBaseElement(first);
+        createClusterByBaseElement(first);
         colorCode = '#' + (Math.random() * 0xFFFFFF << 0).toString(16).padStart(6, '0');
         DOMSet.delete(first);
     }
-    console.log(iframeStack);
 
     if (iframeStack.length) {
         showAllClusters(Array.from(iframeStack.pop().contentWindow.document.querySelectorAll('body *')));
@@ -38,9 +38,10 @@ function showAllClusters(nodeList) {
 }
 
 function createClusterByBaseElement(baseElement) {
+    cluster = [baseElement];
     originElement = baseElement;
-    gridArray.push([originElement.getBoundingClientRect()]);
-    createCoverBox(baseElement, 0);
+    gridArray.push(originElement.getBoundingClientRect());
+    // createCoverBox(baseElement, 0);
     let depth = 0;
     xpathArray = [baseElement];
 
@@ -55,6 +56,9 @@ function createClusterByBaseElement(baseElement) {
         baseElement = baseElement.parentElement;
         xpathArray.push(baseElement);
     }
+
+    if (cluster.length > 0)
+        cluster.forEach(e => createCoverBox(e, 0));
 }
 
 function createCoverBox(element, type) {
@@ -93,6 +97,7 @@ function createCoverBox(element, type) {
     box.style.left = `${r.left}px`;
     box.style.width = `${r.width}px`;
     box.style.height = `${r.height}px`;
+    box.style.pointerEvents = 'none';
     box.classList.add("sideexCoverageElement");
     switch (type) {
         case 0:
@@ -113,15 +118,15 @@ function createCoverBox(element, type) {
 }
 
 function deepSearch(node, depth) {
-    console.log('   ' + depth);
     if (node.tagName === "IFRAME" && iframeStack.indexOf(node) === -1) {
         iframeStack.push(node);
     }
-    if (xpathArray[depth].tagName !== node.tagName || depth > 5) {
+    if (xpathArray[depth].tagName !== node.tagName) {
         return;
     }
-    if (depth == 0 && checkCluster(node)) {
-        createCoverBox(node, 0);
+    if (depth == 0 && checkCluster(node, depth)) {
+        // createCoverBox(node, 0);
+        cluster.push(node);
         DOMSet.delete(node);
 
         return;
@@ -135,7 +140,7 @@ function deepSearch(node, depth) {
     }
 }
 
-function checkCluster(node) {
+function checkCluster(node, depth) {
     const isSame = false;
     const nodeRect = node.getBoundingClientRect();
 
@@ -144,32 +149,29 @@ function checkCluster(node) {
         return false;
     }
 
-    for (const rectRow of gridArray) {
-        // coordination vertical alignment
-        if ((rectRow[0].y === nodeRect.y) ||
-            (rectRow[0].y + rectRow[0].height === nodeRect.y + nodeRect.height) ||
-            (Math.abs((rectRow[0].y + rectRow[0].height / 2) - (nodeRect.y + nodeRect.height / 2)) < 0.5)) {
-            if (nodeRect.width === rectRow[0].width) {
-                gridArray.push([nodeRect]);
-                return true;
-            }
+    if (nodeRect.width === 0 && nodeRect.height === 0) {
+        return false;
+    }
+
+    for (const rect of gridArray) {
+        // coordination horizontal alignment
+        if ((rect.y === nodeRect.y) ||
+            (rect.y + rect.height === nodeRect.y + nodeRect.height) ||
+            (Math.abs((rect.y + rect.height / 2) - (nodeRect.y + nodeRect.height / 2)) < 0.5)) {
+            gridArray.push(nodeRect);
+            return true;
         }
 
-        for (const rect of rectRow) {
-            // coordination horizontal alignment
-            if ((rect.x === nodeRect.x) ||
-                (rect.x + rect.width === nodeRect.x + nodeRect.width) ||
-                (Math.abs((rect.x + rect.width / 2) - (nodeRect.x + nodeRect.width / 2)) < 0.5)) {
-                if (nodeRect.height === rect.height) {
-                    rectRow.push(nodeRect);
-                    return true;
-                }
-            }
+        // coordination vertical alignment
+        if ((rect.x === nodeRect.x) ||
+            (rect.x + rect.width === nodeRect.x + nodeRect.width) ||
+            (Math.abs((rect.x + rect.width / 2) - (nodeRect.x + nodeRect.width / 2)) < 0.5)) {
+            gridArray.push(nodeRect);
+            return true;
         }
     }
 
     return isSame;
 }
 
-
-// showAllClusters($0.querySelectorAll('body *'))
+removeCoverBox();
